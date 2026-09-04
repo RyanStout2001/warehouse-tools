@@ -1,69 +1,210 @@
-import Image from "next/image";
+import Link from "next/link";
+import { EnginePanel } from "@/app/engine-panel";
+import { SyncPanel } from "@/app/sync-panel";
+import { InboundPanel } from "@/app/inbound-panel";
+import {
+  Alert,
+  Badge,
+  PageHeader,
+  Panel,
+  StatCard,
+} from "@/app/ui/primitives";
+import { getDashboardOverview } from "@/lib/data/overview";
+import { getInboundSyncState } from "@/lib/picqer/inbound";
+import { formatNumber } from "@/lib/format";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const overview = await getDashboardOverview();
+  const inboundState = await getInboundSyncState();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+      <PageHeader
+        eyebrow="Workspace"
+        title="Overview"
+        description="See every table at a glance, run sync and balancing, then work the count list."
+        actions={
+          <Link
+            href="/counts"
+            className="inline-flex items-center justify-center rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+            Open count list
+          </Link>
+        }
+      />
+
+      <div className="space-y-4">
+        <ConnectionBanner overview={overview} />
+        {overview.missingEnv.length > 0 ? (
+          <Alert tone="warning" title="Environment incomplete">
+            Add {overview.missingEnv.join(", ")} to{" "}
+            <code className="font-mono">.env.local</code>, then restart{" "}
+            <code className="font-mono">npm run dev</code>.
+          </Alert>
+        ) : null}
+      </div>
+
+      <section className="mt-8">
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Tables</h2>
+            <p className="mt-1 text-sm text-muted">
+              Browse every Supabase table used by the auditor.
+            </p>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {overview.tables.map((table) => (
+            <StatCard
+              key={table.key}
+              label={table.label}
+              value={
+                table.count == null
+                  ? "—"
+                  : formatNumber(table.count, 0)
+              }
+              hint={table.error ?? table.description}
+              href={table.href}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ))}
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section className="mt-8 grid gap-4 lg:grid-cols-3">
+        <StatCard
+          label="Flagged to count"
+          value={
+            overview.engine
+              ? formatNumber(overview.engine.flagged, 0)
+              : "—"
+          }
+          hint="Free stock &gt; 0 on the main list"
+          href="/counts"
+        />
+        <StatCard
+          label="ABC classes"
+          value={
+            overview.engine
+              ? `A ${overview.engine.classA} · B ${overview.engine.classB} · C ${overview.engine.classC}`
+              : "—"
+          }
+          hint="From the last engine run"
+        />
+        <StatCard
+          label="Counts (7 days)"
+          value={
+            overview.engine
+              ? formatNumber(overview.engine.recentEvents, 0)
+              : "—"
+          }
+          hint="Completed balance events"
+          href="/data/balance-events"
+        />
+      </section>
+
+      {overview.engine?.error ? (
+        <div className="mt-4">
+          <Alert tone="danger" title="Could not load engine stats">
+            {overview.engine.error}
+          </Alert>
+        </div>
+      ) : null}
+
+      <section className="mt-8">
+        <Panel>
+          <InboundPanel
+            baselineCompletedAt={inboundState?.baseline_completed_at ?? null}
+          />
+        </Panel>
+      </section>
+
+      <section className="mt-8 grid gap-4 lg:grid-cols-2">
+        <Panel>
+          <SyncPanel />
+        </Panel>
+        <Panel>
+          <EnginePanel />
+        </Panel>
+      </section>
+
+      <section className="mt-8">
+        <Panel>
+          <h2 className="text-lg font-semibold text-foreground">Workflow</h2>
+          <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <WorkflowStep
+              step="1"
+              title="Sync catalog"
+              body="Pull shops and products from Picqer (GET only)."
+            />
+            <WorkflowStep
+              step="2"
+              title="Inbound"
+              body="Snapshot POs once, then refresh receipts and surplus floors."
+            />
+            <WorkflowStep
+              step="3"
+              title="Run engine"
+              body="Classify ABC and flag products that need counting."
+            />
+            <WorkflowStep
+              step="4"
+              title="Count &amp; clear"
+              body="Work the count list and mark items complete."
+            />
+          </ol>
+        </Panel>
+      </section>
+    </main>
+  );
+}
+
+function WorkflowStep({
+  step,
+  title,
+  body,
+}: {
+  step: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <li className="rounded-xl border border-border bg-surface-muted/50 p-4">
+      <Badge tone="accent">Step {step}</Badge>
+      <p className="mt-3 font-medium text-foreground">{title}</p>
+      <p className="mt-1 text-sm leading-6 text-muted">{body}</p>
+    </li>
+  );
+}
+
+function ConnectionBanner({
+  overview,
+}: {
+  overview: Awaited<ReturnType<typeof getDashboardOverview>>;
+}) {
+  const { connection } = overview;
+
+  if (!connection.ok && connection.kind === "missing_env") {
+    return (
+      <Alert tone="warning" title="Supabase environment variables are missing">
+        Copy <code className="font-mono">.env.example</code> to{" "}
+        <code className="font-mono">.env.local</code> and add the public keys.
+      </Alert>
+    );
+  }
+
+  if (!connection.ok && connection.kind === "query_error") {
+    return (
+      <Alert tone="danger" title="Could not query Supabase">
+        <code className="font-mono">{connection.message}</code>
+      </Alert>
+    );
+  }
+
+  return (
+    <Alert tone="success" title="Connected to Supabase">
+      Ready to sync, run the engine, and work counts.
+    </Alert>
   );
 }
